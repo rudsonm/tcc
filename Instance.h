@@ -3,12 +3,13 @@
 #include <vector>
 #include <string>
 #include <fstream>
-#include <math.h>
+#include <cmath>
 #include <map>
 #include <tuple>
 #include <time.h>
 #include "Voxel.h"
 #include <omp.h>
+#include "PDIUtils.h"
 
 using uint = unsigned int;
 using Matriz = std::vector<std::vector<int>>;
@@ -36,6 +37,12 @@ public:
 	std::map<int, Voxels> labeling(bool shouldColor);
 	std::map<int, Voxels> removePeaksOnSaddles();
 	std::map<int, Voxels> mergePeaks();
+	std::vector<cv::Mat> watershed();
+
+	void changeFormat(const int OPEN_CV_FORMAT) {
+		for (int z = 0; z < DEPTH; z++)
+			rock.at(z).convertTo(rock.at(z), OPEN_CV_FORMAT);
+	}
 
 	int get(int z, int x, int y) {
 		if (z < 0 || z >= DEPTH || x < 0 || x >= HEIGHT || y < 0 || y >= WIDTH)
@@ -108,7 +115,7 @@ public:
 		}
 	}
 
-	Instance(std::vector<cv::Mat> rock) {		
+	Instance(const std::vector<cv::Mat> &rock) {		
 		for (int z = 0; z < rock.size(); z++)
 			this->rock.push_back(rock.at(z).clone());
 		this->DEPTH = rock.size();

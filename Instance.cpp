@@ -62,7 +62,6 @@ int Instance::getMinNeighboring(int z, int x, int y) {
 		z - 1 < 0 || z + 1 >= DEPTH)
 		return 0;
 	std::vector<int> values = {
-		get(z, x, y),
 		get(z, x - 1, y),
 		get(z, x + 1, y),
 		get(z, x, y - 1),
@@ -167,7 +166,7 @@ std::vector<cv::Mat> Instance::peakIdentify(int diameter) {
 }
 
 std::map<int, Voxels> Instance::labeling(bool shouldColor) {
-	printf("Labeling\n");
+	printf("Labeling");
 	int label = 1;
 	std::map<int, std::set<int>> eqs;
 	std::vector<std::tuple<int, int, int, int>> labeled;
@@ -230,16 +229,18 @@ std::map<int, Voxels> Instance::labeling(bool shouldColor) {
 			this->peaks.at(equivalence).push_back(voxel);
 	}
 
+	printf(", peaks: %d\n", peaks.size());
+
+	if (!shouldColor)
+		return peaks;
+
 	std::vector<cv::Vec3b> colors;
 	for (size_t i = 0; i < label; i++) {
 		int b = cv::theRNG().uniform(0, 256);
 		int g = cv::theRNG().uniform(0, 256);
 		int r = cv::theRNG().uniform(0, 256);
 		colors.push_back(cv::Vec3b((uchar)b, (uchar)g, (uchar)r));
-	}
-	
-	if (!shouldColor)
-		return peaks;
+	}	
 
 	for (int z = 0; z < DEPTH; z++) {
 		rock.at(z).convertTo(rock.at(z), CV_8UC1);
@@ -258,9 +259,8 @@ std::map<int, Voxels> Instance::labeling(bool shouldColor) {
 }
 
 std::map<int, Voxels> Instance::removePeaksOnSaddles() {
-	printf("Removing peaks on saddles\n");
-	std::vector<int> falsePeaks;
-	printf("Peaks: %d\n", peaks.size());
+	printf("Removing peaks on saddles");
+	std::vector<int> falsePeaks;	
 	for (auto const& peak : peaks) {
 		int label = peak.first;
 		std::set<Voxel> dilated;
@@ -288,21 +288,43 @@ std::map<int, Voxels> Instance::removePeaksOnSaddles() {
 		if(falsePeak)
 			falsePeaks.push_back(label);
 	}
-	printf("False Peaks: %d\n", falsePeaks.size());
+	printf(", falses: %d\n", falsePeaks.size());
 	for (int falsePeak : falsePeaks)
 		peaks.erase(falsePeak);
-	printf("Erased\n");
 	return peaks;
 }
 
-
 std::map<int, Voxels> Instance::mergePeaks() {
-	const int MATRIX_SIZE = peaks.size();
-	int **matrix = new int*[MATRIX_SIZE];
-	for (int i = 0; i < MATRIX_SIZE; i++)
-		matrix[i] = new int[MATRIX_SIZE];
-
-
-
+	printf("Merging peaks");
+	int **matrix = new int*[peaks.size()];
+	for (int i = 0; i < peaks.size(); i++)
+		matrix[i] = new int[peaks.size()];
+	
+	std::vector<Voxel> centroids;
+	std::vector<int> labels;
+	std::vector<int> distances;
+	for (const auto& peak : this->peaks) {
+		labels.push_back(peak.first);
+		centroids.push_back(PDIUtils::getCentroid(peak.second));
+		Voxel voxel = peak.second.at(0);
+		distances.push_back(get(voxel));
+	}
+	
+	for (int i = 0; i < centroids.size(); i++)
+		for (int j = i; j < centroids.size(); j++)
+			matrix[i][j] = PDIUtils::getEuclideanDistance(centroids[i], centroids[j]);
+	
+	std::vector<int> merged;
+	for (int i = 0; i < labels.size(); i++) {
+		for (int j = i + 1; j < labels.size(); j++) {
+			if (matrix[i][j] < distances[i]) {
+				int closestToSolid = (distances[i] < distances[j]) ? labels[i] : labels[j];
+				merged.push_back(closestToSolid);
+			}
+		}
+	}
+	printf(", merged: %d\n", merged.size());
+	for (int label : merged)
+		peaks.erase(label);
 	return peaks;
 }

@@ -11,16 +11,28 @@ SE3D PDIUtils::getSE3D(int diameter) {
 	return se3d;
 }
 
-//void PDIUtils::writeNewInstance() {
-//	ofstream saida("LV60A_amostra_50.dat");
-//	for (int z = 0; z < 50; z++) {
-//		for (int x = 0; x < 50; x++) {
-//			for (int y = 0; y < 50; y++) {
-//				int voxel = instance.rock.at(z).at<char>(x, y);
-//				saida << (voxel == 255) ? 1 : 0;
-//			}
-//		}
-//	}
-//	saida.close();
-//	return 0;
-//}
+Voxel PDIUtils::getCentroid(Voxels peak) {
+	int z = 0, x = 0, y = 0;
+	for (Voxel voxel : peak) {
+		z += voxel.z;
+		x += voxel.x;
+		y += voxel.y;
+	}
+	z = round(z / peak.size());
+	x = round(x / peak.size());
+	y = round(y / peak.size());
+	return Voxel(z, x, y);
+}
+
+int PDIUtils::getManhattanDistance(Voxel a, Voxel b) {
+	return abs(a.z - b.z) + abs(a.x - b.x) + abs(a.y - b.y);
+}
+
+int PDIUtils::getEuclideanDistance(Voxel a, Voxel b) {
+	double distance = sqrt(
+		pow(a.z - b.z, 2) +
+		pow(a.x - b.x, 2) +
+		pow(a.y - b.y, 2)
+	);
+	return round(distance);
+}
