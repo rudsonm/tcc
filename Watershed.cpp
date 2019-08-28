@@ -7,7 +7,8 @@ std::vector<cv::Mat> Watershed::segmentate(const Instance &instance) {
 	for (int z = 0; z < instance.DEPTH; z++) {
 		result.push_back(cv::Mat::zeros(cv::Size(instance.WIDTH, instance.HEIGHT), CV_16U));
 	}
-	std::priority_queue<Voxel> voxels;
+	/*std::priority_queue<Voxel, std::<Voxel>, CompareVoxel> voxels;*/
+	UniquePriorityQueue<Voxel> voxels;
 
 	for (const auto& peak : instance.peaks) {
 		for (Voxel voxel : peak.second)
@@ -31,40 +32,41 @@ std::vector<cv::Mat> Watershed::segmentate(const Instance &instance) {
 				}
 			}
 		}
+	}
 
-		while (!voxels.empty()) {
-			Voxel voxel = voxels.top();
-			voxels.pop();
-			voxel.label = 0;
-			for (int zk = -1; zk <= 1; zk++) {
-				for (int xk = -1; xk <= 1; xk++) {
-					for (int yk = -1; yk <= 1; yk++) {
-						int z = voxel.z + zk,
-							x = voxel.x + xk,
-							y = voxel.y + yk;
+	while (!voxels.empty()) {
+		Voxel voxel = voxels.pop();
+		std::set<int> neighborhood;
+		for (int zk = -1; zk <= 1; zk++) {
+			for (int xk = -1; xk <= 1; xk++) {
+				for (int yk = -1; yk <= 1; yk++) {
+					int z = voxel.z + zk,
+						x = voxel.x + xk,
+						y = voxel.y + yk;
 
-						if (voxel.z == z && voxel.x == x && voxel.y == y)
-							continue;
-						if(z < 0 || z >= instance.DEPTH
+					if (voxel.z == z && voxel.x == x && voxel.y == y)
+						continue;
+					if (z < 0 || z >= instance.DEPTH
 						|| x < 0 || x >= instance.HEIGHT
 						|| y < 0 || y >= instance.WIDTH)
-							continue;
+						continue;
 
-						int neighbor = result.at(z).at<ushort>(x, y);
-						int neighborDistance = instance.rock.at(z).at<uchar>(x, y);
+					int neighbor = result.at(z).at<ushort>(x, y);
+					int neighborDistance = instance.rock.at(z).at<uchar>(x, y);
 
-						if (neighbor == 0 && neighborDistance > 0)
-							voxels.push(Voxel(z, x, y, neighborDistance));
-						else if (voxel.label > 0 && neighbor != voxel.label)
-							voxel.label = -1;
-						else if (voxel.label == 0 && neighbor > 0)
-							voxel.label = neighbor;
-					}
+					if (neighbor == WATERSHED_BARRIER || neighborDistance == 0)
+						continue;
+					else if (neighbor == 0)
+						voxels.push(Voxel(z, x, y, neighborDistance));
+					else if (neighbor != WATERSHED_BARRIER)
+						neighborhood.insert(neighbor);
 				}
 			}
-			if (voxel.label > 0)
-				result.at(voxel.z).at<ushort>(voxel.x, voxel.y) = voxel.label;			
 		}
+		if (neighborhood.size() == 1)
+			result.at(voxel.z).at<ushort>(voxel.x, voxel.y) = *neighborhood.begin();
+		if (neighborhood.size() > 1)
+			result.at(voxel.z).at<ushort>(voxel.x, voxel.y) = WATERSHED_BARRIER;		
 	}
 
 	std::map<int, cv::Vec3b> colors;

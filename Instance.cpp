@@ -115,7 +115,7 @@ void Instance::distanceMap() {
 }
 
 void Instance::gaussianFilter(int kernelSize) {
-	printf("Gaussian Filter\n");
+	printf("Gaussian filter\n");
 	std::vector<Matriz> kernel = kernelGauss3();
 	int metadeKernel = kernel.size() / 2;
 	std::vector<cv::Mat> clone = clone3D();
@@ -142,6 +142,7 @@ void Instance::gaussianFilter(int kernelSize) {
 }
 
 std::vector<cv::Mat> Instance::peakIdentify(int diameter) {
+	printf("Maximum filter\n");
 	std::vector<cv::Mat> clone = clone3D();
 	int radius = diameter / 2;
 

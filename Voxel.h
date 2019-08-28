@@ -20,4 +20,11 @@ struct Voxel {
 	}
 };
 
+struct CompareVoxel {
+	bool operator()(Voxel const& a, Voxel const& b)
+	{
+		return a.intensity < b.intensity;
+	}
+};
+
 using Voxels = std::vector<Voxel>;

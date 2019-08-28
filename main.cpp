@@ -12,15 +12,17 @@ using namespace std;
 int main()
 {
 	cv::namedWindow("labeled", cv::WINDOW_AUTOSIZE);
-	Instance instance("LV60A_amostra_50.dat", 50, 50, 50);
+	//Instance instance("LV60A_amostra_50.dat", 50, 50, 50);
 	//Instance instance("LV60A_amostra.dat", 100, 100, 100);
 	//Instance instance("LV60A.dat", 300, 300, 300);
+	/*Instance instance("Berea.dat", 400, 400, 400);*/
+	Instance instance("C1.dat", 400, 400, 400);
 	//Instance instance("Bentheimer.raw", 1000, 1000, 1000);
 
 	instance.reverse();
 	instance.distanceMap();
 	instance.gaussianFilter(3);
-	
+
 	Instance peaksIdentified(instance.peakIdentify(10));
 
 	instance.peaks = peaksIdentified.labeling(true);	
