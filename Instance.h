@@ -11,8 +11,10 @@
 #include <omp.h>
 #include "PDIUtils.h"
 
+# define M_PI           3.14159265358979323846
+
 using uint = unsigned int;
-using Matriz = std::vector<std::vector<int>>;
+using Matriz = std::vector<std::vector<double>>;
 
 class Instance
 {
@@ -30,6 +32,7 @@ public:
 	cv::Mat resize(int z, double p);
 	int getMinNeighboring(int x, int y, int z);
 	int maximumFilter(int z, int x, int y, int diameter);
+	std::set<ushort> getNeighborsLabels(int z, int x, int y);
 
 	void distanceMap();
 	void gaussianFilter(int kernelSize);
@@ -66,31 +69,23 @@ public:
 		cv::imshow(windowTitle, resize(z, p));
 	}
 
-	std::vector<Matriz> kernelGauss3() {
-		std::vector<Matriz> novoKernelGauss;
-		novoKernelGauss.push_back(Matriz());
-		novoKernelGauss.at(0).push_back({ 1, 2, 1 });
-		novoKernelGauss.at(0).push_back({ 2, 2, 2 });
-		novoKernelGauss.at(0).push_back({ 1, 2, 1 });
-		novoKernelGauss.push_back(Matriz());
-		novoKernelGauss.at(1).push_back({ 1, 2, 1 });
-		novoKernelGauss.at(1).push_back({ 2, 4, 2 });
-		novoKernelGauss.at(1).push_back({ 1, 2, 1 });
-		novoKernelGauss.push_back(Matriz());
-		novoKernelGauss.at(2).push_back({ 1, 2, 1 });
-		novoKernelGauss.at(2).push_back({ 2, 2, 2 });
-		novoKernelGauss.at(2).push_back({ 1, 2, 1 });
-		return novoKernelGauss;
-	}
-
-	Matriz kernelGauss5() {
-		Matriz novoKernelGauss = Matriz();
-		novoKernelGauss.push_back({ 1,  4,  6, 4,  1 });
-		novoKernelGauss.push_back({ 4, 16, 24, 16, 4 });
-		novoKernelGauss.push_back({ 6, 24, 36, 24, 6 });
-		novoKernelGauss.push_back({ 4, 16, 24, 16, 4 });
-		novoKernelGauss.push_back({ 1,  4,  6, 4,  1 });
-		return novoKernelGauss;
+	std::vector<std::vector<std::vector<double>>> gaussianKernel(int size, double sigma = 0.35) {
+		std::vector<std::vector<std::vector<double>>> kernel(size, std::vector<std::vector<double>>(size, std::vector<double>(size)));
+		for (double z = 0; z < size; z++) {
+			for (double x = 0; x < size; x++) {
+				for (double y = 0; y < size; y++) {
+					kernel[x][y][z] = std::exp(
+						-(double)(
+							std::pow(x - size / 2, 2)
+							+ std::pow(y - size / 2, 2)
+							+ std::pow(z - size / 2, 2)
+							) / 2. * std::pow(sigma, 2)
+					);
+					kernel[x][y][z] *= 1. / std::pow(std::sqrt(2. * M_PI) * sigma, 3);
+				}
+			}
+		}
+		return kernel;
 	}
 
 	std::vector<cv::Mat> clone3D() {
@@ -101,6 +96,7 @@ public:
 	}
 
 	void updatePeaks(std::map<int, Voxels> peaks) {
+		this->peaks = peaks;
 		for (int z = 0; z < DEPTH; z++)
 			rock.at(z) = cv::Mat::zeros(cv::Size(WIDTH, HEIGHT), CV_8UC3);
 

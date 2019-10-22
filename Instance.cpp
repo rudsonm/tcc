@@ -35,7 +35,7 @@ cv::Mat Instance::resize(int z, double p) {
 }
 
 void Instance::normalize(double max) {
-	printf("Normalize\n");
+	printf("Normalizing -> 0;%f\n", max);
 	uint maxValue = 0;
 	for (int z = 0; z < DEPTH; z++) {
 		for (int x = 0; x < WIDTH; x++) {
@@ -87,6 +87,20 @@ int Instance::maximumFilter(int z, int x, int y, int diameter) {
 	return maxValue;
 }
 
+std::set<ushort> Instance::getNeighborsLabels(int z, int x, int y) {
+	std::set<ushort> neighborhood;
+	for (int zk = z - 1; zk <= z + 1; zk++)
+		for (int xk = x - 1; xk <= x + 1; xk++)
+			for (int yk = y - 1; yk <= y + 1; yk++) {
+				if (zk < 0 || zk >= DEPTH || xk < 0 || xk >= HEIGHT || yk < 0 || yk >= WIDTH)
+					continue;
+				ushort label = rock.at(zk).at<ushort>(xk, yk);
+				if(label > 0)
+					neighborhood.insert(label);
+			}
+	return neighborhood;
+}
+
 void Instance::distanceMap() {
 	printf("Distance map\n");
 	for (int z = 0; z < DEPTH; z++) {
@@ -116,20 +130,29 @@ void Instance::distanceMap() {
 
 void Instance::gaussianFilter(int kernelSize) {
 	printf("Gaussian filter\n");
-	std::vector<Matriz> kernel = kernelGauss3();
+	std::vector<Matriz> kernel = gaussianKernel(kernelSize, 0.35);
 	int metadeKernel = kernel.size() / 2;
 	std::vector<cv::Mat> clone = clone3D();
 
+	int count = 0;
+
 	#pragma omp parallel for
-	for (int z = metadeKernel; z < DEPTH - metadeKernel; z++) {
-		for (int x = metadeKernel; x < HEIGHT - metadeKernel; x++) {
-			for (int y = metadeKernel; y < WIDTH - metadeKernel; y++) {
+	for (int z = 0; z < DEPTH; z++) {
+;		for (int x = 0; x < HEIGHT; x++) {
+			for (int y = 0; y < WIDTH; y++) {				
 				int somatorio = 0;
 				int somatorioPesos = 0;
 				for (int zk = 0; zk < kernel.size(); zk++) {
 					for (int xk = 0; xk < kernel.size(); xk++) {
 						for (int yk = 0; yk < kernel.size(); yk++) {
-							int voxel = clone[z - metadeKernel + zk].at<uchar>(x - metadeKernel + xk, y - metadeKernel + yk);
+							int zn = z - metadeKernel + zk,
+								yn = y - metadeKernel + yk,
+								xn = x - metadeKernel + xk;
+							if (zn < 0 || zn >= DEPTH ||
+								xn < 0 || xn >= HEIGHT ||
+								yn < 0 || yn >= WIDTH)
+								continue;
+							int voxel = clone[zn].at<uchar>(xn, yn);
 							somatorio += voxel * kernel[zk][xk][yk];
 							somatorioPesos += kernel[zk][xk][yk];
 						}
@@ -155,7 +178,7 @@ std::vector<cv::Mat> Instance::peakIdentify(int diameter) {
 					for (int xk = 0; xk < diameter; xk++) {
 						for (int yk = 0; yk < diameter; yk++) {
 							int voxel = get(z - radius + zk, x - radius + xk, y - radius + yk);							
-							if (voxel >= 0 && voxel != maximumValue)
+							if (voxel >= 0 && voxel < maximumValue)
 								clone.at(z - radius + zk).at<uchar>(x - radius + xk, y - radius + yk) = 0;
 						}
 					}
@@ -189,7 +212,7 @@ std::map<int, Voxels> Instance::labeling(bool shouldColor) {
 					neighborhood.push_back(rock.at(z).at<ushort>(x - 1, y));
 
 				int currentLabel;
-				if (neighborhood.size() == 0) {					
+				if (neighborhood.size() == 0) {
 					currentLabel = label++;
 					eqs.insert(std::make_pair(currentLabel, std::set<int>({currentLabel})));
 				} else {
@@ -259,7 +282,7 @@ std::map<int, Voxels> Instance::labeling(bool shouldColor) {
 	return peaks;
 }
 
-std::map<int, Voxels> Instance::removePeaksOnSaddles() {
+std::map<int, Voxels> Instance::removePeaksOnSaddles() {	
 	printf("Removing peaks on saddles");
 	std::vector<int> falsePeaks;	
 	for (auto const& peak : peaks) {
@@ -269,25 +292,30 @@ std::map<int, Voxels> Instance::removePeaksOnSaddles() {
 		bool falsePeak = false;
 		int dilatedSize;
 		do {
-			Voxels neighborhood;
-			for (Voxel voxel : dilated) {
-				int distanceValue = get(voxel.z, voxel.x, voxel.y);
-				for (int zk = -1; zk <= 1; zk++)
-					for(int xk = -1; xk <= 1; xk++)
-						for(int yk = -1; yk <= 1; yk++) {
-							Voxel neighVoxel(voxel.z + zk, voxel.x + xk, voxel.y + yk);
-							int neighDistanceValue = get(neighVoxel);
-							if (neighDistanceValue == distanceValue)
-								neighborhood.push_back(neighVoxel);
-							else if (neighDistanceValue > distanceValue)
-								falsePeak = true;
-						}
-			}			
 			dilatedSize = dilated.size();
-			dilated.insert(neighborhood.begin(), neighborhood.end());
-		} while (dilated.size() > dilatedSize && !falsePeak);
-		if(falsePeak)
-			falsePeaks.push_back(label);
+			for (Voxel voxel : dilated) {
+				voxel.intensity = get(voxel);
+				for (int zk = -1; zk <= 1; zk++) {
+					for (int xk = -1; xk <= 1; xk++) {
+						for (int yk = -1; yk <= 1; yk++) {
+							Voxel neighVoxel(voxel.z + zk, voxel.x + xk, voxel.y + yk);
+							neighVoxel.intensity = get(neighVoxel);
+							if (neighVoxel.intensity <= 0 || voxel == neighVoxel)
+								continue;
+							if (neighVoxel.intensity == voxel.intensity)
+								dilated.insert(neighVoxel);
+							else if (neighVoxel.intensity > voxel.intensity) {
+								falsePeak = true;
+								goto endOfDilating;
+							}
+						}
+					}
+				}
+			}			
+		} while (dilated.size() > dilatedSize);
+		endOfDilating:
+			if(falsePeak)
+				falsePeaks.push_back(label);
 	}
 	printf(", falses: %d\n", falsePeaks.size());
 	for (int falsePeak : falsePeaks)
@@ -323,9 +351,10 @@ std::map<int, Voxels> Instance::mergePeaks() {
 				merged.push_back(closestToSolid);
 			}
 		}
-	}
-	printf(", merged: %d\n", merged.size());
+	}	
+	int peaksSize = peaks.size();
 	for (int label : merged)
 		peaks.erase(label);
+	printf(", merged: %d\n", peaksSize - peaks.size());
 	return peaks;
 }

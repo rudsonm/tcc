@@ -18,6 +18,14 @@ struct Voxel {
 			return true;
 		return false;
 	}
+
+	bool operator==(const Voxel& b) const {
+		return b.z == z && b.x == x && b.y == y;
+	}
+
+	void print() {
+		printf("X: %i\tY: %i\tZ: %i\tI: %i\n", x, y, z, intensity);
+	}
 };
 
 struct CompareVoxel {
