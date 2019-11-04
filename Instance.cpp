@@ -101,6 +101,21 @@ std::set<ushort> Instance::getNeighborsLabels(int z, int x, int y) {
 	return neighborhood;
 }
 
+std::set<Voxel> Instance::getNeighborsVoxels(int z, int x, int y) {
+	std::set<Voxel> neighborhood;
+	for (int zk = z - 1; zk <= z + 1; zk++)
+		for (int xk = x - 1; xk <= x + 1; xk++)
+			for (int yk = y - 1; yk <= y + 1; yk++) {
+				if (zk < 0 || zk >= DEPTH || xk < 0 || xk >= HEIGHT || yk < 0 || yk >= WIDTH)
+					continue;				
+				ushort label = rock.at(zk).at<ushort>(xk, yk);
+				if (label > 0) {
+					Voxel voxel(zk, xk, yk);
+					neighborhood.insert(voxel);
+				}
+			}
+}
+
 void Instance::distanceMap() {
 	printf("Distance map\n");
 	for (int z = 0; z < DEPTH; z++) {

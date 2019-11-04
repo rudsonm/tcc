@@ -11,16 +11,20 @@
 #define BACK 6
 
 struct Edge {
-	int source, target, weight, flow = 0;
+	int source, target, length;
+	float weight = 0., flow = 0.;
+	float radius = 0.;
+	Voxel centroid;
 };
 
 struct Vertex {
 	Voxel voxel;
-	bool surface = false;
+	float surface = 0;
 	int volume = 0;
+	int radius = 0;
 	std::vector<int> directions;
 	Vertex(Voxel voxel) : voxel(voxel) {}
-	Vertex(Voxel voxel, bool surface) : voxel(voxel), surface(surface) {}
+	Vertex(Voxel voxel, int radius) : voxel(voxel), radius(radius) {}
 	bool isInDirection(int direction) {
 		for (int dir : directions)
 			if (dir == direction)
@@ -47,6 +51,23 @@ public:
 		adjacentList[vertex.voxel.label] = std::map<int, Edge>();
 	}
 
+	void add(int label) {
+		Voxel v(0, 0, 0);
+		v.label = label;
+		Vertex vertex(v);
+		this->add(vertex);
+	}
+
+	void addEdge(int u, int v, float weight) {
+		adjacentList[u][v].weight = weight;
+		adjacentList[u][v].source = u;
+		adjacentList[u][v].target = v;
+
+		adjacentList[v][u].weight = weight;
+		adjacentList[v][u].source = v;
+		adjacentList[v][u].target = u;
+	}
+
 	Vertex *getVertex(int label) {
 		for (Vertex& vertex : vertices)
 			if (vertex.voxel.label == label)
@@ -71,19 +92,20 @@ public:
 
 	void setVertexDirections(int label, std::vector<int> directions) {
 		Vertex* vertex = getVertex(label);
-				
-		for (int d1 : directions) {
-			bool exists = false;
-			for (int d2 : vertex->directions) {
-				if (d1 == d2) {
-					exists = true;
+		if (directions.size() > 0) {
+			vertex->surface++;
+			for (int d1 : directions) {
+				bool exists = false;
+				for (int d2 : vertex->directions) {
+					if (d1 == d2) {
+						exists = true;
+					}
+				}
+				if (!exists) {
+					vertex->directions.push_back(d1);
 				}
 			}
-			if (!exists) {
-				vertex->directions.push_back(d1);
-				vertex->surface = true;
-			}
-		}
+		}		
 	}
 
 	int getAvailableLabel() {
@@ -98,36 +120,46 @@ public:
 		return label;
 	}
 
-	Vertex setArtificialVertex(int direction, int weight) {
+	Vertex setArtificialVertex(int direction) {
 		Voxel voxel(-1, -1, -1);
 		voxel.label = this->getAvailableLabel();
 		Vertex artificialVertex(voxel);
 		this->add(artificialVertex);
+		float totalWeight = 0.;
 		for (Vertex vertex : vertices) {
 			if (vertex.isInDirection(direction)) {
 				adjacentList[artificialVertex.voxel.label][vertex.voxel.label] = Edge();
 				adjacentList[artificialVertex.voxel.label][vertex.voxel.label].source = artificialVertex.voxel.label;
 				adjacentList[artificialVertex.voxel.label][vertex.voxel.label].target = vertex.voxel.label;
-				adjacentList[artificialVertex.voxel.label][vertex.voxel.label].weight = weight;
+				adjacentList[artificialVertex.voxel.label][vertex.voxel.label].weight = vertex.surface;
 
 				adjacentList[vertex.voxel.label][artificialVertex.voxel.label] = Edge();
 				adjacentList[vertex.voxel.label][artificialVertex.voxel.label].source = vertex.voxel.label;
 				adjacentList[vertex.voxel.label][artificialVertex.voxel.label].target = artificialVertex.voxel.label;
-				adjacentList[vertex.voxel.label][artificialVertex.voxel.label].weight = weight;
+				adjacentList[vertex.voxel.label][artificialVertex.voxel.label].weight = vertex.surface;
 			}
 		}
 		return artificialVertex;
 	}
 
+	float getSurfaceArea(int direction) {
+		float totalSurface = 0.;
+		for (Vertex vertex : vertices) {
+			if (vertex.isInDirection(direction)) {
+				totalSurface += vertex.surface;
+			}
+		}
+		return totalSurface;
+	}
+
 	// https://cp-algorithms.com/graph/push-relabel.html
 	// active node = node != source & target, height[v] < |V| e excess[v] > 0
-	double getPushRelabelMaximumFlow(int sourceDirection, int targetDirection) {
-		Vertex source = this->setArtificialVertex(sourceDirection, 5000);
-		Vertex target = this->setArtificialVertex(targetDirection, 5000);
-
-		printf("source: %i, sink: %i\n", source.voxel.label, target.voxel.label);
+	float getPushRelabelMaximumFlow(int sourceDirection, int targetDirection) {
+		Vertex source = this->setArtificialVertex(sourceDirection);
+		Vertex target = this->setArtificialVertex(targetDirection);
+		
 		std::map<int, int> height;
-		std::map<int, int> excess;
+		std::map<int, float> excess;
 		std::queue<int> vqueue;	
 
 		// Init labels
@@ -147,15 +179,13 @@ public:
 		
 		do {
 			int current = vqueue.front();			
-			vqueue.pop();
-			printf("current: %i\n", current);
+			vqueue.pop();			
 			if (current != source.voxel.label && current != target.voxel.label) {
 				this->discharge(current, vqueue, height, excess);
 			}
-			printf("\n");
 		} while (!vqueue.empty());
 
-		int maximumFlow = 0.;
+		float maximumFlow = 0.;
 		for (auto const& edge : adjacentList[target.voxel.label]) {
 			int source = edge.second.target;
 			int target = edge.second.source;
@@ -164,22 +194,19 @@ public:
 		return maximumFlow;
 	}
 
-	void discharge(int u, std::queue<int>& vqueue, std::map<int, int> &height, std::map<int, int> &excess) {
+	void discharge(int u, std::queue<int>& vqueue, std::map<int, int> &height, std::map<int, float> &excess) {
 		while (excess[u] > 0) {
 			bool hasPush = false;
 			for (auto const& edge : adjacentList[u]) {
 				int v = edge.second.target;
-				if (edge.second.weight - edge.second.flow > 0 && height[u] == height[v] + 1) {
+				if (excess[u] > 0 && edge.second.weight - edge.second.flow > 0 && height[u] == height[v] + 1) {					
 					this->push(u, v, excess);
 					if (excess[v] > 0) {
 						vqueue.push(v);
 					}
-					printf("from %i pushed to %i\n", u, v);
 					hasPush = true;
 				}
 			}
-			printf("height: %i\n", height[u]);
-			printf("excess: %i\n", excess[u]);
 			if (!hasPush)
 				break;
 		}
@@ -189,9 +216,9 @@ public:
 		}
 	}
 
-	int excessFlow(int label) {
+	float excessFlow(int label) {
 		Vertex *vertex = getVertex(label);
-		int outcomingFlow = 0, incomingFlow = 0;
+		float outcomingFlow = 0, incomingFlow = 0;
 		for (auto const& edge : adjacentList[label])
 			outcomingFlow += edge.second.flow;
 
@@ -206,15 +233,15 @@ public:
 		return outcomingFlow - incomingFlow;
 	}
 
-	bool push(int u, int v, std::map<int, int> &x) {
-		int residual = adjacentList[u][v].weight - adjacentList[u][v].flow;
-		int delta = (x[u] < residual) ? x[u] : residual;
-		
+	bool push(int u, int v, std::map<int, float> &x) {
+		float residual = adjacentList[u][v].weight - adjacentList[u][v].flow;
+		float delta = (x[u] < residual) ? x[u] : residual;
+
 		adjacentList[u][v].flow += delta;
 		adjacentList[v][u].flow -= delta;
 		x[u] -= delta;
 		x[v] += delta;
-		
+
 		return delta && x[v] == delta;
 	}
 
@@ -227,6 +254,10 @@ public:
 		}
 		if(minLabel < INT_MAX)
 			height[u] = minLabel + 1;
+	}
+
+	int getResidualCapacity(int u, int v) {
+		return adjacentList[u][v].weight - adjacentList[v][u].flow;
 	}
 
 	void print() {

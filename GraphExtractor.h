@@ -7,7 +7,7 @@
 class GraphExtractor
 {
 public:
-	static Graph extract(Instance &instance);
+	static Graph extract(Instance &instance, const Instance &distanceMap, float viscosity, float resolution);
 	static std::vector<int> isSurfaceVertex(const Voxel &v, int DEPTH, int HEIGHT, int WIDTH) {
 		std::vector<int> directions;
 		if (v.z == 0)

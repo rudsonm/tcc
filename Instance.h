@@ -33,6 +33,7 @@ public:
 	int getMinNeighboring(int x, int y, int z);
 	int maximumFilter(int z, int x, int y, int diameter);
 	std::set<ushort> getNeighborsLabels(int z, int x, int y);
+	std::set<Voxel> getNeighborsVoxels(int z, int x, int y);
 
 	void distanceMap();
 	void gaussianFilter(int kernelSize);

@@ -3,6 +3,7 @@
 
 struct Voxel {
 	int x, y, z, intensity = 0, label;
+	Voxel() {};
 	Voxel(int z, int x, int y) : z(z), x(x), y(y) { }
 	Voxel(int z, int x, int y, int intensity) : z(z), x(x), y(y), intensity(intensity) { }
 
